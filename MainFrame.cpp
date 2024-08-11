@@ -8,7 +8,7 @@
 #include <mutex>
 using namespace std;
 
-bool Wave1 = true, Wave2 = false, Wave3 = false, Wave4 = false;
+bool Wave[4] = { true, false, false, false };
 
 // Wave Properties
 double octaveBaseFreqs[4] = { 110.0, 440.0, 440.0, 440.0 };
@@ -24,6 +24,8 @@ double waveFunctionReturner(double dTime)
     double returning = 0;
     for (int i = 0; i <= 3; i++)
     {
+        if (Wave[i] == false)
+            continue;
         switch (types[i])
         {
             // Sin Wave
@@ -59,8 +61,9 @@ MainFrame::MainFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title, 
     // Sound Object
     Sound<short>* soundObj = new Sound<short>();
     vector<wstring> audioDevices = soundObj->getSoundDevices();
-    soundObj->initializeDevice(audioDevices[0], 1, 44100, 16, 1024);
+    soundObj->initializeDevice(audioDevices[0], 1, 44100, 16, 8192);
     soundObj->setWaveFunc(waveFunctionReturner);
+
 
     // Header Panel
     wxPanel* headerPanel = new wxPanel(this, wxID_ANY, wxPoint(0, 0), wxSize(800, 50));
@@ -102,15 +105,15 @@ MainFrame::MainFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title, 
     // Disable Button
     wxButton* ENWaveformBtn1 = new wxButton(firstWavePanel, wxID_ANY, "Disable", wxPoint(10, 10), wxSize(80, 30));
     ENWaveformBtn1->Bind(wxEVT_BUTTON, [ENWaveformBtn1](wxCommandEvent& evt) {
-        if (Wave1 == true)
+        if (Wave[0] == true)
         {
             ENWaveformBtn1->SetLabel("Enable");
-            Wave1 = false;
+            Wave[0] = false;
         }
         else
         {
             ENWaveformBtn1->SetLabel("Disable");
-            Wave1 = true;
+            Wave[0] = true;
         }
     });
     ENWaveformBtn1->SetFont(wxFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL,
@@ -119,6 +122,7 @@ MainFrame::MainFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title, 
     // Play Button
     wxButton* PlayWaveformBtn1 = new wxButton(firstWavePanel, wxID_ANY, "Play", wxPoint(100, 10), wxSize(80, 30));
     PlayWaveformBtn1->Bind(wxEVT_BUTTON, [soundObj, PlayWaveformBtn1](wxCommandEvent& evt) {
+        soundObj->setWaveFunc(waveFunctionReturner);
         soundObj->Play();
         PlayWaveformBtn1->SetLabel("Stop");
     });
@@ -142,9 +146,10 @@ MainFrame::MainFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title, 
         wxSize(150, -1), 4, waveformComboItems, wxCB_DROPDOWN | wxCB_READONLY);
     waveTypeCombo1->SetFont(wxFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL,
         wxFONTWEIGHT_NORMAL, false));
-    waveTypeCombo1->Bind(wxEVT_COMBOBOX, [waveTypeCombo1](wxCommandEvent& cmd) {
+    waveTypeCombo1->Bind(wxEVT_COMBOBOX, [waveTypeCombo1, soundObj](wxCommandEvent& cmd) {
         types[0] = waveTypeCombo1->GetSelection();
-        });
+        soundObj->setWaveFunc(waveFunctionReturner);
+     });
 
     // Waveform Volume label
     wxStaticText* waveVolLabel1 = new wxStaticText(firstWavePanel, wxID_ANY, "Volume:", wxPoint(10, 83));
@@ -161,19 +166,21 @@ MainFrame::MainFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title, 
         wxFONTWEIGHT_BOLD, false));
     // Volume Slider for waveform 1
     wxSlider* volSlider1 = new wxSlider(firstWavePanel, wxID_ANY, 0, 0, 10, wxPoint(120, 80), wxSize(130, -1));
-    volSlider1->Bind(wxEVT_SCROLL_THUMBTRACK, [waveVolValLabel1, volSlider1](wxCommandEvent& evt) {
+    volSlider1->Bind(wxEVT_SCROLL_THUMBTRACK, [waveVolValLabel1, volSlider1, soundObj](wxCommandEvent& evt) {
         if (volSlider1->GetValue() < 10)
             waveVolValLabel1->SetLabelText("0." + wxString::Format("%i", volSlider1->GetValue()));
         else
             waveVolValLabel1->SetLabelText("1." + wxString::Format("%i", volSlider1->GetValue()).substr(1, wxString::Format("%i", volSlider1->GetValue()).length()));
         waveVolValLabel1->GetLabel().ToDouble(&amps[0]);
+        soundObj->setWaveFunc(waveFunctionReturner);
     });
-    volSlider1->Bind(wxEVT_SCROLL_CHANGED, [waveVolValLabel1, volSlider1](wxCommandEvent& evt) {
+    volSlider1->Bind(wxEVT_SCROLL_CHANGED, [waveVolValLabel1, volSlider1, soundObj](wxCommandEvent& evt) {
         if (volSlider1->GetValue() < 10)
             waveVolValLabel1->SetLabelText("0." + wxString::Format("%i", volSlider1->GetValue()));
         else
             waveVolValLabel1->SetLabelText("1." + wxString::Format("%i", volSlider1->GetValue()).substr(1, wxString::Format("%i", volSlider1->GetValue()).length()));
         waveVolValLabel1->GetLabel().ToDouble(&amps[0]);
+        soundObj->setWaveFunc(waveFunctionReturner);
     });
 
     // Waveform Tune label
@@ -194,7 +201,7 @@ MainFrame::MainFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title, 
     tuneSlider1->Bind(wxEVT_SCROLL_THUMBTRACK, [waveTuneValLabel1, tuneSlider1](wxCommandEvent& evt) {
         waveTuneValLabel1->SetLabelText(wxString::Format("%i", tuneSlider1->GetValue()));
         tunes[0] = tuneSlider1->GetValue();
-        });
+    });
     tuneSlider1->Bind(wxEVT_SCROLL_CHANGED, [waveTuneValLabel1, tuneSlider1](wxCommandEvent& evt) {
         if (tuneSlider1->GetValue() < 10)
             waveTuneValLabel1->SetLabelText("0." + wxString::Format("%i", tuneSlider1->GetValue()));
@@ -206,17 +213,17 @@ MainFrame::MainFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title, 
 
     // Second Wave Panel
     // Disable Button
-    wxButton* ENWaveformBtn2 = new wxButton(secondWavePanel, wxID_ANY, "Disable", wxPoint(10, 10), wxSize(80, 30));
+    wxButton* ENWaveformBtn2 = new wxButton(secondWavePanel, wxID_ANY, "Enable", wxPoint(10, 10), wxSize(80, 30));
     ENWaveformBtn2->Bind(wxEVT_BUTTON, [ENWaveformBtn2](wxCommandEvent& evt) {
-        if (Wave2 == true)
+        if (Wave[1] == true)
         {
             ENWaveformBtn2->SetLabel("Enable");
-            Wave2 = false;
+            Wave[1] = false;
         }
         else
         {
             ENWaveformBtn2->SetLabel("Disable");
-            Wave2 = true;
+            Wave[1] = true;
         }
     });
     ENWaveformBtn2->SetFont(wxFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL,
@@ -304,17 +311,17 @@ MainFrame::MainFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title, 
 
     // Third Wave Panel
     // Disable Button
-    wxButton* ENWaveformBtn3 = new wxButton(thirdWavePanel, wxID_ANY, "Disable", wxPoint(10, 10), wxSize(80, 30));
+    wxButton* ENWaveformBtn3 = new wxButton(thirdWavePanel, wxID_ANY, "Enable", wxPoint(10, 10), wxSize(80, 30));
     ENWaveformBtn3->Bind(wxEVT_BUTTON, [ENWaveformBtn3](wxCommandEvent& evt) {
-        if (Wave3 == true)
+        if (Wave[2] == true)
         {
             ENWaveformBtn3->SetLabel("Enable");
-            Wave3 = false;
+            Wave[2] = false;
         }
         else
         {
             ENWaveformBtn3->SetLabel("Disable");
-            Wave3 = true;
+            Wave[2] = true;
         }
     });
     ENWaveformBtn3->SetFont(wxFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL,
@@ -401,17 +408,17 @@ MainFrame::MainFrame(const wxString& title) : wxFrame(nullptr, wxID_ANY, title, 
 
     // Fourth Wave Panel
     // Disable Button
-    wxButton* ENWaveformBtn4 = new wxButton(forthWavePanel, wxID_ANY, "Disable", wxPoint(10, 10), wxSize(80, 30));
+    wxButton* ENWaveformBtn4 = new wxButton(forthWavePanel, wxID_ANY, "Enable", wxPoint(10, 10), wxSize(80, 30));
     ENWaveformBtn4->Bind(wxEVT_BUTTON, [ENWaveformBtn4](wxCommandEvent& evt) {
-        if (Wave4 == true)
+        if (Wave[3] == true)
         {
             ENWaveformBtn4->SetLabel("Enable");
-            Wave4 = false;
+            Wave[3] = false;
         }
         else
         {
             ENWaveformBtn4->SetLabel("Disable");
-            Wave4 = true;
+            Wave[3] = true;
         }
     });
     ENWaveformBtn4->SetFont(wxFont(12, wxFONTFAMILY_DEFAULT, wxFONTSTYLE_NORMAL,

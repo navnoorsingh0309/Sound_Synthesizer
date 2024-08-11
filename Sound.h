@@ -84,7 +84,7 @@ public:
 			format.nBlockAlign = format.nChannels * format.wBitsPerSample / 8;
 			format.nAvgBytesPerSec = format.nSamplesPerSec * format.nBlockAlign;
 			// If failed to open device
-			if (waveOutOpen(&wave_out, deviceID, &format, (DWORD_PTR )WaveOutProcWrapper, (DWORD_PTR)this, CALLBACK_FUNCTION) != MMSYSERR_NOERROR)
+			if (waveOutOpen(&wave_out, deviceID, &format, NULL, (DWORD_PTR)this, CALLBACK_FUNCTION) != MMSYSERR_NOERROR)
 			{
 				return false;
 			}
@@ -129,7 +129,9 @@ public:
 		play = true;
 		nBlocks--;
 		audioThread = std::thread(&Sound::MainThread, this);
-		//audioThread.join();
+		// Set the thread priority to a higher level
+		SetThreadPriority(audioThread.native_handle(), THREAD_PRIORITY_TIME_CRITICAL);
+		audioThread.detach();
 	}
 	void Stop()
 	{
@@ -160,34 +162,11 @@ private:
 	unsigned int nBlockSamples = 512;
 
 	std::thread audioThread;
-	std::mutex audioMutex;
-	std::condition_variable isBlockFree;
 
 	unsigned int audioBitDepthInBytes;
 	std::atomic<bool> play = 0;
 	std::atomic<double> dTime = 0.0;
 
-	// Waveout Proc wrapper
-	static void CALLBACK WaveOutProcWrapper(
-		HWAVEOUT hwo,
-		UINT uMsg,
-		DWORD_PTR dwInstance,
-		DWORD_PTR dwParam1,
-		DWORD_PTR dwParam2
-	) {
-		((Sound*)dwInstance)->WaveOutProc(hwo, uMsg, dwParam1, dwParam2);
-	}
-
-	// Waveout Proc
-	void CALLBACK WaveOutProc(HWAVEOUT wave_out_handle, UINT message,
-		DWORD_PTR param1, DWORD_PTR param2)
-	{
-		if (message == WOM_DONE)
-		{
-			nFreeBlocks++;
-			isBlockFree.notify_one();
-		}
-	}
 	double clip(double dSample, double dMax)
 	{
 		if (dSample >= 0.0)
@@ -200,24 +179,24 @@ private:
 	{
 		dTime = 0.0;
 		double dTimeStep = 1.0 / (double)this->samplingRate;
-		short nMaxSample = (short)pow(2, (sizeof(short) * 8) - 1) - 1;
+		T nMaxSample = (T)pow(2, (sizeof(T) * 8) - 1) - 1;
 		double dMaxSample = (double)nMaxSample;
 		while (play)
 		{
-			if (nFreeBlocks <= 0)
+			/* if (nFreeBlocks <= 0)
 			{
 				std::unique_lock<std::mutex> ul(audioMutex);
 				isBlockFree.wait(ul);
-			}
+			} */
 			nFreeBlocks--;
 			// Prepare block for processing
 			if (waveHeader[currentBlock].dwFlags & WHDR_PREPARED)
 				waveOutUnprepareHeader(wave_out, &waveHeader[currentBlock], sizeof(WAVEHDR));
 
-			short newSample;
+			T newSample;
 			for (unsigned int n = 0; n < nBlockSamples; n++)
 			{
-				newSample = (short)(sin(Sound<short>::Hz2W(440.0) * dTime) * 0.5 * dMaxSample);
+				newSample = (T)(waveFunction(dTime) * dMaxSample);
 				
 				memoryBlocks[currentBlock * nBlockSamples + n] = newSample;
 				dTime = dTime + dTimeStep;
